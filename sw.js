@@ -1,6 +1,6 @@
 // App files: network first, cached for offline. The model library from jsDelivr: cache first
 // (it's a pinned version). Model weights are cached by the library itself. GitHub is never cached.
-const CACHE = "ideas-v2";
+const CACHE = "ideas-v3";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "core.js", "manifest.webmanifest", "icon.svg"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener("activate", e => {
