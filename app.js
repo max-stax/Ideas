@@ -264,7 +264,7 @@ function thoughtDetail(id) {
   const t = byId(id); if (!t) return `<div class="empty">This thought was deleted.</div>`;
   $("#title").textContent = when(t.created).replace(/^./, c => c.toUpperCase());
   let h = `<div class="detail"><textarea id="edit" data-id="${t.id}">${esc(t.text)}</textarea>
-    <div class="row"><span class="t2 note">${t.source === "chat" ? "Banked from a chat" : "Captured on your phone"} · ${new Date(t.created).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span></div></div>`;
+    <div class="row"><span class="t2 note">${({ chat: "Banked from a chat", obsidian: "From your Obsidian vault" })[t.source] || "Captured on your phone"} · ${new Date(t.created).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span></div></div>`;
   const links = (claude?.links || []).filter(l => (l.a === id || l.b === id) && byId(l.a === id ? l.b : l.a));
   if (links.length) {
     h += `<div class="sec">Claude connected this to</div><div class="list">` +
