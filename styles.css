@@ -17,13 +17,13 @@
   }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 var(--sans); }
-body { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+html, body { margin: 0; overscroll-behavior-y: none; background: var(--bg); color: var(--text); font: 16px/1.45 var(--sans); }
+body { padding-top: calc(54px + env(safe-area-inset-top, 0px)); padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
 button, input, textarea { font: inherit; color: inherit; }
 
-header.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; min-height: 52px;
-  padding: calc(8px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-left, 0px)) 8px max(16px, env(safe-area-inset-right, 0px)); border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); }
+header.top { position: fixed; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 10px;
+  height: calc(54px + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-left, 0px)) 0 max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--line); background: var(--bg); }
 header.top h1 { flex: 1; margin: 0; font: 600 18px/1.2 var(--serif); letter-spacing: -.01em; }
 .status { font: 11px var(--mono); color: var(--mute); text-align: right; }
 .iconbtn { background: none; border: 0; padding: 6px; border-radius: 8px; color: var(--text-2); cursor: pointer; }
@@ -93,7 +93,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); }
 
 nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; display: grid; grid-template-columns: repeat(4, 1fr);
   padding: 4px 6px max(6px, calc(env(safe-area-inset-bottom, 0px) - 22px)); border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); }
+  background: var(--bg); }
 nav.tabs button { background: none; border: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 11px; color: var(--mute); padding: 4px; cursor: pointer; }
 nav.tabs .ic { font-size: 19px; line-height: 1.2; }
 nav.tabs button.on { color: var(--accent); }
