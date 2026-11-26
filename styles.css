@@ -91,7 +91,7 @@ label.f input[type=password], label.f input[type=text] { width: 100%; padding: 1
 label.f small { display: block; font-size: 12px; color: var(--mute); margin-top: 5px; }
 input[type=range] { width: 100%; accent-color: var(--accent); }
 
-nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; display: grid; grid-template-columns: repeat(4, 1fr);
+nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; display: grid; grid-template-columns: repeat(3, 1fr);
   padding: 4px 6px max(6px, calc(env(safe-area-inset-bottom, 0px) - 22px)); border-top: 1px solid var(--line);
   background: var(--bg); }
 nav.tabs button { background: none; border: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 11px; color: var(--mute); padding: 4px; cursor: pointer; }
@@ -100,3 +100,17 @@ nav.tabs button.on { color: var(--accent); }
 
 .toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 9;
   background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 99px; font-size: 14px; max-width: 90vw; }
+
+/* themes list */
+.tlist { display: flex; flex-direction: column; }
+.trow { display: flex; align-items: baseline; gap: 14px; padding: 15px 2px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.trow:last-child { border-bottom: 0; }
+.trow:active { background: var(--panel-2); }
+.trow .tt { flex: 1; font: 17px/1.35 var(--serif); }
+.trow .tc { font: 13px var(--mono); color: var(--mute); }
+
+/* thought view & edit */
+.full { font: 19px/1.55 var(--serif); white-space: pre-wrap; overflow-wrap: anywhere; padding: 4px 2px 6px; }
+.editbox { display: block; width: 100%; height: calc(100dvh - 54px - 64px - 150px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); min-height: 280px;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 14px; font: 18px/1.55 var(--serif); outline: 0; resize: none; }
+.sp { flex: 1; }

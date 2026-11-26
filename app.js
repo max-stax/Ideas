@@ -13,7 +13,7 @@ const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } 
 let cfg = { owner: "max-stax", dataRepo: "idea-bank", token: "", tight: C.THEME_MIN, ...(readLS(CFG_KEY) || {}) };
 let bank = readLS(BANK_KEY) || { thoughts: [], deleted: {} };
 let claude = readLS(CL_KEY);
-const ui = { view: "dump", stack: [], q: "", resurfaceId: null, pair: null, sync: "", model: "off", pct: 0 };
+const ui = { view: "dump", stack: [], q: "", sync: "", model: "off", pct: 0 };
 
 const vecs = new Map();     // id -> Float32Array
 const vecHash = new Map();  // id -> hash of the text the vector was made from
@@ -183,164 +183,84 @@ async function sync() {
 }
 
 // ------------------------------------------------------------------ views
-function thoughtRow(t, extra = "") {
+function thoughtRow(t) {
   return `<div class="thought" data-act="open" data-id="${t.id}">
     <div class="tx">${withTags(t.text)}</div>
-    ${extra}
-    <div class="meta">${when(t.created)}${t.source === "chat" ? ' <span class="badge">chat</span>' : ""}</div>
+    <div class="meta">${when(t.created)}</div>
   </div>`;
 }
 
 function viewDump() {
   return `<div class="capture">
       <textarea id="cap" placeholder="What's on your mind?" enterkeyhint="enter">${esc(localStorage.getItem(DRAFT_KEY) || "")}</textarea>
-      <div class="bar"><span class="hint">Use #words to tag, if you want.</span><button class="btn" data-act="save" id="saveBtn">Save</button></div>
+      <div class="bar"><span class="sp"></span><button class="btn" data-act="save" id="saveBtn">Save</button></div>
     </div>
-    <input class="search" id="q" type="search" placeholder="Search ${bank.thoughts.length} thoughts" value="${esc(ui.q)}">
+    <input class="search" id="q" type="search" placeholder="Search" value="${esc(ui.q)}">
     <div id="dumpList"></div>`;
 }
 function dumpList() {
   const terms = ui.q.toLowerCase().split(/\s+/).filter(Boolean);
   const list = terms.length ? bank.thoughts.filter(t => terms.every(w => t.text.toLowerCase().includes(w))) : bank.thoughts;
-  if (!bank.thoughts.length) return `<div class="empty">Nothing here yet. Get it out of your head.</div>`;
-  if (!list.length) return `<div class="empty">No thoughts match “${esc(ui.q)}”.</div>`;
+  if (!list.length) return `<div class="empty">${bank.thoughts.length ? "No matches" : "Nothing yet"}</div>`;
   return `<div class="list">${list.map(t => thoughtRow(t)).join("")}</div>`;
 }
 
-function modelNote() {
-  if (ui.model === "error") return `<div class="card note">The theme finder couldn't load. It needs a connection the first time (about 25 MB), then works offline. <button class="btn ghost" data-act="retryModel">Try again</button></div>`;
-  if (ui.model !== "ready") return `<div class="note">Reading your thoughts${ui.pct ? ` (${ui.pct}%)` : ""}… The first load downloads a small model; after that it's instant.</div>`;
-  return "";
-}
+// A theme's title is the first line of its most central thought.
+const titleOf = text => {
+  const line = (text || "").replace(/#[\p{L}\p{N}_-]+/gu, "").split("\n").map(s => s.replace(/\s+/g, " ").trim()).find(Boolean) || "";
+  return line.length > 70 ? line.slice(0, 68).replace(/\s+\S*$/, "") + "…" : line;
+};
+const themeRow = (src, i, title, n) =>
+  `<div class="trow" data-act="theme" data-src="${src}" data-i="${i}"><span class="tt">${esc(title)}</span><span class="tc">${n}</span></div>`;
 
 function viewThemes() {
-  let h = "";
-  if (claude?.themes?.length) {
-    h += `<div class="sec">Claude's read · ${esc(when(claude.updated))}</div>`;
-    h += claude.themes.map((th, i) => {
-      const ids = (th.ids || []).filter(byId);
-      const lead = byId(ids[0]);
-      return `<div class="card theme" data-act="theme" data-src="claude" data-i="${i}">
-        <span class="count">${ids.length}</span><div class="name">${esc(th.name)}</div>
-        ${th.summary ? `<div class="sum">${esc(th.summary)}</div>` : ""}
-        ${lead ? `<div class="lead">${esc(lead.text)}</div>` : ""}</div>`;
-    }).join("");
-  }
-  h += `<div class="sec">Themes the app found</div>`;
-  if (bank.thoughts.length < 3) h += `<div class="empty">Themes show up once you have a handful of thoughts.</div>`;
-  else if (ui.model !== "ready") h += modelNote();
-  else {
-    const { themes, loose } = autoThemes();
-    h += themes.length ? themes.map((th, i) => `<div class="card theme" data-act="theme" data-src="auto" data-i="${i}">
-        <span class="count">${th.ids.length}</span>
-        <div class="name">${esc(th.label.length ? th.label.join(" · ") : "Untitled")}</div>
-        <div class="lead">${esc(byId(th.ids[0])?.text)}</div></div>`).join("")
-      : `<div class="empty">No clear themes yet. Keep dumping.</div>`;
-    if (loose) h += `<div class="note">${loose} thought${loose === 1 ? " doesn't" : "s don't"} fit a theme yet. Tightness is in Settings.</div>`;
-  }
-  const tags = new Map();
-  for (const t of bank.thoughts) for (const g of C.tagsOf(t.text)) tags.set(g, (tags.get(g) || 0) + 1);
-  if (tags.size) {
-    h += `<div class="sec">Your tags</div><div class="filters">` +
-      [...tags.entries()].sort((a, b) => b[1] - a[1]).map(([g, n]) => `<button class="chip" data-act="tagq" data-v="${esc(g)}">${esc(g)} ${n}</button>`).join("") + `</div>`;
-  }
-  return h;
+  const rows = [];
+  (claude?.themes || []).forEach((th, i) => {
+    const n = (th.ids || []).filter(byId).length;
+    if (n) rows.push(themeRow("claude", i, th.name, n));
+  });
+  if (ui.model === "ready") autoThemes().themes.forEach((th, i) => rows.push(themeRow("auto", i, titleOf(byId(th.ids[0])?.text), th.ids.length)));
+  if (rows.length) return `<div class="tlist">${rows.join("")}</div>`;
+  if (ui.model === "error") return `<div class="empty">Couldn't load. <button class="btn ghost" data-act="retryModel">Retry</button></div>`;
+  if (ui.model !== "ready") return `<div class="empty">Loading${ui.pct ? ` ${ui.pct}%` : "…"}</div>`;
+  return `<div class="empty">No themes yet</div>`;
 }
 
 function themeDetail(src, i) {
-  if (src === "claude") {
-    const th = claude?.themes?.[i]; if (!th) return `<div class="empty">That theme is gone.</div>`;
-    $("#title").textContent = th.name;
-    const ids = (th.ids || []).filter(byId);
-    return (th.summary ? `<div class="card">${esc(th.summary)}</div>` : "") +
-      `<div class="list">${ids.map(id => thoughtRow(byId(id))).join("")}</div>`;
-  }
-  const th = autoThemes().themes[i]; if (!th) return `<div class="empty">That theme is gone.</div>`;
-  $("#title").textContent = th.label.join(" · ") || "Theme";
-  return `<div class="list">${th.ids.map(id => thoughtRow(byId(id))).join("")}</div>`;
+  const th = src === "claude" ? claude?.themes?.[i] : autoThemes().themes[i];
+  if (!th) return `<div class="empty">Gone</div>`;
+  $("#title").textContent = src === "claude" ? th.name : titleOf(byId(th.ids[0])?.text);
+  const items = th.ids.map(byId).filter(Boolean).sort((a, b) => (a.created || "").localeCompare(b.created || ""));
+  return `<div class="list">${items.map(t => thoughtRow(t)).join("")}</div>`;
 }
 
-function thoughtDetail(id) {
-  const t = byId(id); if (!t) return `<div class="empty">This thought was deleted.</div>`;
-  $("#title").textContent = when(t.created).replace(/^./, c => c.toUpperCase());
-  let h = `<div class="detail"><textarea id="edit" data-id="${t.id}">${esc(t.text)}</textarea>
-    <div class="row"><span class="t2 note">${({ chat: "Banked from a chat", obsidian: "From your Obsidian vault" })[t.source] || "Captured on your phone"} · ${new Date(t.created).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span></div></div>`;
-  const links = (claude?.links || []).filter(l => (l.a === id || l.b === id) && byId(l.a === id ? l.b : l.a));
-  if (links.length) {
-    h += `<div class="sec">Claude connected this to</div><div class="list">` +
-      links.map(l => thoughtRow(byId(l.a === id ? l.b : l.a), l.why ? `<div class="why">${esc(l.why)}</div>` : "")).join("") + `</div>`;
-  }
-  h += `<div class="sec">Related</div>`;
-  if (ui.model !== "ready" || !vecs.has(id)) h += modelNote() || `<div class="note">Working on it…</div>`;
-  else {
-    const rel = C.related(id, bank.thoughts, vecs, 6);
-    h += rel.length ? `<div class="list">${rel.map(r => thoughtRow(r.t)).join("")}</div>` : `<div class="note">Nothing close yet. This one's new territory.</div>`;
-  }
-  h += `<div class="row"><button class="btn danger" data-act="del" data-id="${t.id}">Delete thought</button></div>`;
-  return h;
-}
-
-function pickResurface() {
-  const all = bank.thoughts; if (!all.length) return null;
-  const old = all.filter(t => Date.now() - new Date(t.created) > 3 * 864e5);
-  const pool = (old.length ? old : all).filter(t => t.id !== ui.resurfaceId);
-  return (pool.length ? pool : all)[Math.floor(Math.random() * (pool.length || all.length))].id;
-}
-function pickPair() {
-  const items = bank.thoughts.filter(t => vecs.has(t.id));
-  if (items.length < 6) return null;
-  // Not the same idea, not unrelated: the zone where a new connection might be.
-  let best = null;
-  for (let i = 0; i < 150; i++) {
-    const a = items[Math.floor(Math.random() * items.length)], b = items[Math.floor(Math.random() * items.length)];
-    if (a === b) continue;
-    const s = C.dot(vecs.get(a.id), vecs.get(b.id));
-    if (s > 0.2 && s < 0.4) return [a.id, b.id];
-    if (!best || Math.abs(s - 0.3) < best.d) best = { d: Math.abs(s - 0.3), p: [a.id, b.id] };
-  }
-  return best?.p || null;
-}
-function viewResurface() {
-  if (!bank.thoughts.length) return `<div class="empty">Once you've dumped a few thoughts, old ones will come back here.</div>`;
-  if (!ui.resurfaceId || !byId(ui.resurfaceId)) ui.resurfaceId = pickResurface();
-  const t = byId(ui.resurfaceId);
-  let h = `<div class="sec">From ${esc(when(t.created))}</div>
-    <div class="card"><div class="big" data-act="open" data-id="${t.id}">${withTags(t.text)}</div></div>`;
-  if (ui.model === "ready" && vecs.has(t.id)) {
-    const rel = C.related(t.id, bank.thoughts, vecs, 3);
-    if (rel.length) h += `<div class="sec">Sits near</div><div class="list">${rel.map(r => thoughtRow(r.t)).join("")}</div>`;
-  }
-  h += `<div class="row"><button class="btn ghost" data-act="another">Show another</button></div>`;
-  if (ui.model === "ready") {
-    if (!ui.pair || !byId(ui.pair[0]) || !byId(ui.pair[1])) ui.pair = pickPair();
-    if (ui.pair) {
-      const [a, b] = ui.pair.map(byId);
-      h += `<div class="sec">Collision</div><div class="pair">
-        <div class="card"><div class="big" style="font-size:17px" data-act="open" data-id="${a.id}">${withTags(a.text)}</div></div>
-        <div class="and">How do these connect?</div>
-        <div class="card"><div class="big" style="font-size:17px" data-act="open" data-id="${b.id}">${withTags(b.text)}</div></div></div>
-        <div class="row"><button class="btn ghost" data-act="newpair">Another pair</button></div>`;
-    }
-  } else h += modelNote();
+function thoughtDetail(id, editing) {
+  const t = byId(id); if (!t) return `<div class="empty">Deleted</div>`;
+  const date = new Date(t.created).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  $("#title").textContent = date;
+  if (editing) return `<textarea id="edit" class="editbox" data-id="${t.id}">${esc(t.text)}</textarea>
+    <div class="row"><button class="btn danger" data-act="del" data-id="${t.id}">Delete</button><span class="sp"></span>
+      <button class="btn ghost" data-act="cancelEdit">Cancel</button><button class="btn" data-act="saveEdit">Save</button></div>`;
+  let h = `<div class="full">${withTags(t.text)}</div>
+    <div class="row"><button class="btn ghost" data-act="edit">Edit</button></div>`;
+  const near = new Map();
+  for (const l of claude?.links || []) if (l.a === id || l.b === id) { const o = byId(l.a === id ? l.b : l.a); if (o) near.set(o.id, o); }
+  if (ui.model === "ready" && vecs.has(id)) for (const r of C.related(id, bank.thoughts, vecs, 6)) near.set(r.t.id, r.t);
+  if (near.size) h += `<div class="sec">Related</div><div class="list">${[...near.values()].slice(0, 6).map(o => thoughtRow(o)).join("")}</div>`;
   return h;
 }
 
 function viewSettings() {
-  const n = bank.thoughts.length, chats = bank.thoughts.filter(t => t.source === "chat").length;
   return `<div class="card">
-    <label class="f"><span>GitHub token</span><input type="password" id="tok" value="${esc(cfg.token)}" placeholder="github_pat_…" autocomplete="off">
-      <small>Fine-grained token with “Contents: Read and write” on <b>${esc(cfg.dataRepo)}</b> only. Stored only on this device.</small></label>
-    <label class="f"><span>Private repo for your thoughts</span><input type="text" id="repo" value="${esc(cfg.dataRepo)}" autocapitalize="off" autocorrect="off"></label>
-    <div class="row"><button class="btn" data-act="saveTok">Save &amp; sync</button><span class="sp"></span><span class="note">${esc(ui.sync || (cfg.token ? "" : "not syncing"))}</span></div>
+    <label class="f"><span>GitHub token</span><input type="password" id="tok" value="${esc(cfg.token)}" placeholder="github_pat_…" autocomplete="off"></label>
+    <label class="f"><span>Repo</span><input type="text" id="repo" value="${esc(cfg.dataRepo)}" autocapitalize="off" autocorrect="off"></label>
+    <div class="row"><button class="btn" data-act="saveTok">Save &amp; sync</button><span class="sp"></span><span class="note">${esc(ui.sync)}</span></div>
   </div>
   <div class="card">
     <label class="f"><span>Theme tightness</span><input type="range" id="tight" min="0.30" max="0.60" step="0.02" value="${cfg.tight}">
-      <small style="display:flex;justify-content:space-between"><span>Broader, fewer themes</span><span>Tighter, more themes</span></small></label>
+      <small style="display:flex;justify-content:space-between"><span>Fewer</span><span>More</span></small></label>
   </div>
-  <div class="card">
-    <div class="note" style="margin:0 0 10px">${n} thought${n === 1 ? "" : "s"}${chats ? `, ${chats} from chats` : ""}. Theme finder: ${ui.model === "ready" ? "ready, on this device" : ui.model === "error" ? "couldn't load" : "loading"}.</div>
-    <button class="btn ghost" data-act="export">Export as Markdown</button>
-  </div>`;
+  <div class="card"><button class="btn ghost" data-act="export">Export as Markdown</button></div>`;
 }
 
 // ------------------------------------------------------------------ render
@@ -348,22 +268,19 @@ function render() {
   const top = ui.stack[ui.stack.length - 1];
   $("#back").hidden = !top;
   document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("on", b.dataset.v === ui.view));
-  const titles = { dump: "Dump", themes: "Themes", resurface: "Resurface", settings: "Settings" };
-  $("#title").textContent = titles[ui.view];
-  if (top?.kind === "thought") main.innerHTML = thoughtDetail(top.id);
+  $("#title").textContent = { dump: "Dump", themes: "Themes", settings: "Settings" }[ui.view];
+  if (top?.kind === "thought") main.innerHTML = thoughtDetail(top.id, top.editing);
   else if (top?.kind === "theme") main.innerHTML = themeDetail(top.src, top.i);
   else if (ui.view === "dump") { main.innerHTML = viewDump(); $("#dumpList").innerHTML = dumpList(); bindDump(); }
   else if (ui.view === "themes") main.innerHTML = viewThemes();
-  else if (ui.view === "resurface") main.innerHTML = viewResurface();
   else main.innerHTML = viewSettings();
-  if (top?.kind === "thought") bindEdit();
   if (ui.view === "settings" && !top) $("#tight").addEventListener("input", e => { cfg.tight = +e.target.value; writeLS(CFG_KEY, cfg); themeCache = null; });
 }
 // Re-render without stealing focus from something the user is typing in.
 function refreshQuiet() {
   const top = ui.stack[ui.stack.length - 1];
-  if (!top && ui.view === "dump") { const l = $("#dumpList"); if (l) l.innerHTML = dumpList(); const q = $("#q"); if (q) q.placeholder = `Search ${bank.thoughts.length} thoughts`; return; }
-  if (document.activeElement?.id === "edit" || document.activeElement?.tagName === "INPUT") return;
+  if (!top && ui.view === "dump") { const l = $("#dumpList"); if (l) l.innerHTML = dumpList(); return; }
+  if (top?.editing || document.activeElement?.tagName === "INPUT") return;
   render();
 }
 
@@ -373,25 +290,13 @@ function bindDump() {
   cap.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveThought(); } });
   q.addEventListener("input", () => { ui.q = q.value; $("#dumpList").innerHTML = dumpList(); });
 }
-function bindEdit() {
-  const ed = $("#edit"); if (!ed) return;
-  const commit = () => {
-    const t = byId(ed.dataset.id), v = ed.value.trim();
-    if (!t || !v || v === t.text) return;
-    t.text = v; t.u = new Date().toISOString(); changed();
-  };
-  ed.addEventListener("input", () => { clearTimeout(bindEdit.t); bindEdit.t = setTimeout(commit, 1000); });
-  ed.addEventListener("blur", commit);
-}
 
 function saveThought() {
   const cap = $("#cap"), text = cap.value.trim();
   if (!text) return cap.focus();
-  const now = new Date().toISOString();
-  bank.thoughts.unshift({ id: C.newId(), text, created: now, source: "phone" });
+  bank.thoughts.unshift({ id: C.newId(), text, created: new Date().toISOString(), source: "phone" });
   cap.value = ""; localStorage.removeItem(DRAFT_KEY);
   $("#dumpList").innerHTML = dumpList();
-  $("#q").placeholder = `Search ${bank.thoughts.length} thoughts`;
   toast("Saved"); changed();
 }
 
@@ -407,9 +312,9 @@ document.addEventListener("click", async e => {
   const el = e.target.closest("[data-act]"); if (!el) return;
   const a = el.dataset.act;
   if (a === "tab") { ui.stack = []; ui.view = el.dataset.v; render(); scrollTo(0, 0); }
-  else if (a === "back") { $("#edit")?.blur(); ui.stack.pop(); render(); }
+  else if (a === "back") { ui.stack.pop(); render(); }
   else if (a === "save") saveThought();
-  else if (a === "open") { e.stopPropagation(); $("#edit")?.blur(); ui.stack.push({ kind: "thought", id: el.dataset.id }); render(); scrollTo(0, 0); }
+  else if (a === "open") { e.stopPropagation(); ui.stack.push({ kind: "thought", id: el.dataset.id }); render(); scrollTo(0, 0); }
   else if (a === "theme") { ui.stack.push({ kind: "theme", src: el.dataset.src, i: +el.dataset.i }); render(); scrollTo(0, 0); }
   else if (a === "tagq") { e.stopPropagation(); ui.q = el.dataset.v; ui.stack = []; ui.view = "dump"; render(); }
   else if (a === "del") {
@@ -419,8 +324,13 @@ document.addEventListener("click", async e => {
     bank.deleted = { ...(bank.deleted || {}), [id]: new Date().toISOString() };
     ui.stack.pop(); render(); toast("Deleted"); changed();
   }
-  else if (a === "another") { ui.resurfaceId = pickResurface(); render(); }
-  else if (a === "newpair") { ui.pair = pickPair(); render(); }
+  else if (a === "edit") { ui.stack[ui.stack.length - 1].editing = true; render(); const ed = $("#edit"); ed.focus(); ed.setSelectionRange(ed.value.length, ed.value.length); }
+  else if (a === "cancelEdit") { ui.stack[ui.stack.length - 1].editing = false; render(); }
+  else if (a === "saveEdit") {
+    const ed = $("#edit"), t = byId(ed.dataset.id), v = ed.value.trim();
+    if (t && v && v !== t.text) { t.text = v; t.u = new Date().toISOString(); changed(); toast("Saved"); }
+    ui.stack[ui.stack.length - 1].editing = false; render();
+  }
   else if (a === "retryModel") { ui.model = "off"; loadModel(); render(); }
   else if (a === "export") exportMd();
   else if (a === "saveTok") {
